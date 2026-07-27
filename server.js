@@ -57,5 +57,7 @@ app.post('/api/analyze', async (req, res) => {
     res.status(500).json({ error: error.message || "Failed to process request" });
   }
 });
-
+app.get('/', (req, res) => {
+     res.sendFile(path.join(process.cwd(), 'index.html'));
+   });
 export default app;
