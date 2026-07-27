@@ -63,8 +63,9 @@ app.post('/api/analyze', async (req, res) => {
       return res.status(404).json({ success: false, error: "No product data returned from scraper." });
     }
 
+    // Call Gemini API with a supported model name
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       config: {
         systemInstruction: systemInstructionPrompt,
         temperature: 0.2
