@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amazon Product Analyzer</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fffbebe',
+              500: '#f59e0b',
+              600: '#d97706',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Marked.js for rendering Gemini Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    /* Styling for Gemini's rendered markdown output */
+    .markdown-body {
+      color: #cbd5e1;
+      line-height: 1.7;
+    }
+    .markdown-body h1 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #334155;
+    }
+    .markdown-body h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #fbbf24;
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .markdown-body h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 1.25rem;
+      margin-bottom: 1rem;
+      list-style-type: disc;
+    }
+    .markdown-body li {
+      margin-bottom: 0.35rem;
+    }
+    .markdown-body p {
+      margin-bottom: 1rem;
+    }
+    .markdown-body strong {
+      color: #f8fafc;
+    }
+    .markdown-body hr {
+      border-color: #334155;
+      margin: 1.5rem 0;
+    }
+    .markdown-body blockquote {
+      border-left: 4px solid #f59e0b;
+      padding-left: 1rem;
+      color: #94a3b8;
+      font-style: italic;
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+
+  <main class="flex-1 max-w-4xl w-full mx-auto px-4 py-12 flex flex-col justify-center">
+    
+    <!-- Hero Section -->
+    <div class="text-center space-y-4 mb-8">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 text-sm font-medium border border-amber-500/20">
+        <i data-lucide="sparkles" class="w-4 h-4"></i> Apify + Gemini AI Intelligence
+      </div>
+      <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
+        Amazon Product Analyzer
+      </h1>
+      <p class="text-slate-400 text-base md:text-lg max-w-xl mx-auto">
+        Analyze any Amazon product by URL or paste raw Apify JSON to transform it into an executive markdown report via Gemini 2.5 Flash.
+      </p>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl backdrop-blur-sm">
+      
+      <!-- Input Mode Switcher Tabs -->
+      <div class="flex border-b border-slate-800 mb-6 gap-6 text-sm font-medium">
+        <button 
+          id="tabUrl" 
+          type="button" 
+          onclick="switchMode('url')"
+          class="pb-3 text-amber-400 border-b-2 border-amber-400 flex items-center gap-2 transition"
+        >
+          <i data-lucide="link" class="w-4 h-4"></i> Amazon Product URL
+        </button>
+        <button 
+          id="tabJson" 
+          type="button" 
+          onclick="switchMode('json')"
+          class="pb-3 text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 transition"
+        >
+          <i data-lucide="file-json" class="w-4 h-4"></i> Paste Raw Apify JSON
+        </button>
+      </div>
+
+      <form id="analyzerForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+        
+        <!-- Mode A: URL Input -->
+        <div id="urlContainer" class="space-y-2">
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+              <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+            </div>
+            <input 
+              type="text" 
+              id="urlInput"
+              placeholder="Paste Amazon Product URL (e.g. https://www.amazon.com/dp/B08N5WRWNW)" 
+              class="w-full pl-11 pr-4 py-3.5 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+            />
+          </div>
+          <!-- Quick Fill Samples -->
+          <div class="pt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            <span class="font-medium text-slate-500">Try sample:</span>
+            <button type="button" onclick="fillSample('https://www.amazon.com/dp/B08N5WRWNW')" class="hover:text-amber-400 underline decoration-slate-700 underline-offset-2 transition">Wireless Headphones</button>
+            <span>•</span>
+            <button type="button" onclick="fillSample('https://www.amazon.com/dp/B09B2W4X72')" class="hover:text-amber-400 underline decoration-slate-700 underline-offset-2 transition">Smart Watch</button>
+          </div>
+        </div>
+
+        <!-- Mode B: Raw JSON Input -->
+        <div id="jsonContainer" class="hidden space-y-2">
+          <textarea 
+            id="jsonInput" 
+            rows="6"
+            placeholder='Paste raw JSON array output from Apify here: [{"title": "Amazon Headphones", "price": "$129.99", ...}]' 
+            class="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 font-mono text-xs placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition"
+          ></textarea>
+        </div>
+
+        <!-- Submit Button -->
+        <button 
+          type="submit" 
+          id="submitBtn"
+          class="w-full py-4 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 font-bold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-amber-500/10"
+        >
+          <span id="btnText">Analyze & Generate Report</span>
+          <i id="btnIcon" data-lucide="sparkles" class="w-5 h-5"></i>
+        </button>
+      </form>
+    </div>
+
+    <!-- Error Alert -->
+    <div id="errorAlert" class="hidden mt-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-center gap-3">
+      <i data-lucide="alert-triangle" class="w-5 h-5 shrink-0"></i>
+      <span id="errorMessage">Please enter a valid Amazon product URL or JSON string.</span>
+    </div>
+
+    <!-- Loading Indicator Banner -->
+    <div id="loadingBanner" class="hidden mt-6 p-6 bg-slate-900 border border-amber-500/30 rounded-2xl flex flex-col items-center justify-center gap-3 text-center animate-pulse">
+      <div class="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+      <div>
+        <h4 class="text-amber-400 font-semibold text-sm">Processing Product Data</h4>
+        <p class="text-xs text-slate-400 mt-1">Apify is scraping Amazon product details & Gemini is transforming it into a structured report...</p>
+      </div>
+    </div>
+
+    <!-- Results Display Area -->
+    <div id="resultsCard" class="hidden mt-8 space-y-6">
+      
+      <!-- Metadata Header Card -->
+      <div id="metadataCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-slate-800">
+          <div>
+            <span class="text-xs uppercase tracking-wider font-semibold text-amber-400">Target ASIN</span>
+            <h2 id="displayAsin" class="text-2xl font-bold font-mono text-white">---</h2>
+          </div>
+          <div class="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-medium">
+            <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Gemini Transformation Complete
+          </div>
+        </div>
+
+        <div class="mt-4 flex justify-between text-sm">
+          <span class="text-slate-400">Canonical URL:</span>
+          <a id="displayCanonical" href="#" target="_blank" class="text-amber-400 hover:underline truncate max-w-md font-mono text-xs"></a>
+        </div>
+      </div>
+
+      <!-- Generated Markdown Report -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl">
+        <div class="flex items-center justify-between pb-4 mb-6 border-b border-slate-800">
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <i data-lucide="file-text" class="w-5 h-5 text-amber-400"></i>
+            Executive Product Report
+          </h3>
+          <span class="text-xs text-slate-500 font-mono">gemini-2.5-flash</span>
+        </div>
+
+        <!-- Rendered Markdown Container -->
+        <div id="markdownOutput" class="markdown-body"></div>
+      </div>
+
+      <!-- Raw JSON Details Accordion -->
+      <details class="bg-slate-900/60 border border-slate-800/80 rounded-xl overflow-hidden group">
+        <summary class="p-4 text-xs font-mono text-slate-400 cursor-pointer hover:text-slate-200 transition flex items-center justify-between">
+          <span>View Raw Apify JSON Response Payload</span>
+          <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180"></i>
+        </summary>
+        <pre id="rawJsonOutput" class="p-4 bg-slate-950 text-slate-300 font-mono text-xs overflow-x-auto border-t border-slate-800 max-h-96"></pre>
+      </details>
+
+    </div>
+
+  </main>
+
+  <footer class="py-6 text-center text-xs text-slate-600 border-t border-slate-900">
+    Amazon Product Analyzer &bull; Connected to Live Vercel Backend & Gemini AI
+  </footer>
+
+  <script>
+    // Live Vercel Endpoint
+    const API_URL = 'https://amazon-backend-mzqu.vercel.app/api/analyze';
+
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    let currentMode = 'url'; // 'url' or 'json'
+
+    function switchMode(mode) {
+      currentMode = mode;
+      const tabUrl = document.getElementById('tabUrl');
+      const tabJson = document.getElementById('tabJson');
+      const urlContainer = document.getElementById('urlContainer');
+      const jsonContainer = document.getElementById('jsonContainer');
+
+      if (mode === 'url') {
+        tabUrl.className = 'pb-3 text-amber-400 border-b-2 border-amber-400 flex items-center gap-2 transition';
+        tabJson.className = 'pb-3 text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 transition';
+        urlContainer.classList.remove('hidden');
+        jsonContainer.classList.add('hidden');
+      } else {
+        tabJson.className = 'pb-3 text-amber-400 border-b-2 border-amber-400 flex items-center gap-2 transition';
+        tabUrl.className = 'pb-3 text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center gap-2 transition';
+        jsonContainer.classList.remove('hidden');
+        urlContainer.classList.add('hidden');
+      }
+    }
+
+    function fillSample(url) {
+      document.getElementById('urlInput').value = url;
+    }
+
+    function extractASIN(url) {
+      const regex = /(?:dp|gp\/product)\/([A-Z0-9]{10})/i;
+      const match = url.match(regex);
+      return match ? match[1] : null;
+    }
+
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+
+      const errorAlert = document.getElementById('errorAlert');
+      const errorMessage = document.getElementById('errorMessage');
+      const loadingBanner = document.getElementById('loadingBanner');
+      const resultsCard = document.getElementById('resultsCard');
+      const submitBtn = document.getElementById('submitBtn');
+      const btnText = document.getElementById('btnText');
+
+      // Hide alerts & previous results
+      errorAlert.classList.add('hidden');
+      resultsCard.classList.add('hidden');
+
+      let payload = {};
+
+      if (currentMode === 'url') {
+        const url = document.getElementById('urlInput').value.trim();
+        const asin = extractASIN(url);
+
+        if (!url || !asin) {
+          errorMessage.textContent = 'Invalid Amazon URL format. Make sure the URL contains a valid 10-character ASIN (e.g. /dp/B08N5WRWNW).';
+          errorAlert.classList.remove('hidden');
+          return;
+        }
+
+        payload = { url };
+        document.getElementById('displayAsin').textContent = asin;
+        const canonical = `https://www.amazon.com/dp/${asin}`;
+        document.getElementById('displayCanonical').textContent = canonical;
+        document.getElementById('displayCanonical').href = canonical;
+        document.getElementById('metadataCard').classList.remove('hidden');
+
+      } else {
+        const rawJsonText = document.getElementById('jsonInput').value.trim();
+
+        if (!rawJsonText) {
+          errorMessage.textContent = 'Please paste a raw JSON string into the textarea.';
+          errorAlert.classList.remove('hidden');
+          return;
+        }
+
+        try {
+          const parsed = JSON.parse(rawJsonText);
+          payload = { rawJson: parsed };
+          document.getElementById('metadataCard').classList.add('hidden');
+        } catch (err) {
+          errorMessage.textContent = 'Invalid JSON syntax. Please verify your pasted Apify JSON array.';
+          errorAlert.classList.remove('hidden');
+          return;
+        }
+      }
+
+      // Show Loading State
+      submitBtn.disabled = true;
+      submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
+      btnText.textContent = 'Analyzing & Scraping...';
+      loadingBanner.classList.remove('hidden');
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Failed to process product analysis.');
+        }
+
+        // Render Markdown using Marked.js
+        document.getElementById('markdownOutput').innerHTML = marked.parse(data.markdownReport || '');
+        document.getElementById('rawJsonOutput').textContent = JSON.stringify(data.rawJson || data, null, 2);
+
+        // Show Results Card
+        resultsCard.classList.remove('hidden');
+
+      } catch (err) {
+        errorMessage.textContent = err.message || 'An error occurred while connecting to the backend server.';
+        errorAlert.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+        btnText.textContent = 'Analyze & Generate Report';
+        loadingBanner.classList.add('hidden');
+      }
+    }
+  </script>
+</body>
+</html>
