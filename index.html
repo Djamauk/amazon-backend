@@ -163,13 +163,30 @@
           <span id="btnText">Analyze & Generate Report</span>
           <i id="btnIcon" data-lucide="sparkles" class="w-5 h-5"></i>
         </button>
+
+        <!-- Endpoint Selection Settings -->
+        <div class="pt-4 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-slate-400">
+          <div class="flex items-center gap-2">
+            <i data-lucide="server" class="w-4 h-4 text-amber-400"></i>
+            <span class="font-medium text-slate-300">API Endpoint:</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <select id="endpointSelect" onchange="handleEndpointChange(this.value)" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono w-full sm:w-auto">
+              <option value="vercel">Remote Vercel (https://amazon-backend-mzqu.vercel.app)</option>
+              <option value="local">Local Node Server (http://localhost:3000)</option>
+              <option value="relative">Relative Path (/api/analyze)</option>
+              <option value="demo">Offline Demo / Mock Mode</option>
+            </select>
+          </div>
+        </div>
+
       </form>
     </div>
 
     <!-- Error Alert -->
-    <div id="errorAlert" class="hidden mt-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-center gap-3">
-      <i data-lucide="alert-triangle" class="w-5 h-5 shrink-0"></i>
-      <span id="errorMessage">Please enter a valid Amazon product URL or JSON string.</span>
+    <div id="errorAlert" class="hidden mt-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-start gap-3">
+      <i data-lucide="alert-triangle" class="w-5 h-5 shrink-0 mt-0.5"></i>
+      <div id="errorMessage" class="flex-1 leading-relaxed">Please enter a valid Amazon product URL or JSON string.</div>
     </div>
 
     <!-- Loading Indicator Banner -->
@@ -234,8 +251,24 @@
   </footer>
 
   <script>
-    // Live Vercel Endpoint
-    const API_URL = 'https://amazon-backend-mzqu.vercel.app/api/analyze';
+    const ENDPOINTS = {
+      vercel: 'https://amazon-backend-mzqu.vercel.app/api/analyze',
+      local: 'http://localhost:3000/api/analyze',
+      relative: '/api/analyze',
+      demo: 'demo'
+    };
+
+    let activeEndpointKey = 'vercel';
+
+    function getApiUrl() {
+      return ENDPOINTS[activeEndpointKey];
+    }
+
+    function handleEndpointChange(value) {
+      activeEndpointKey = value;
+      const errorAlert = document.getElementById('errorAlert');
+      errorAlert.classList.add('hidden');
+    }
 
     // Initialize Lucide Icons
     lucide.createIcons();
@@ -298,7 +331,10 @@
           return;
         }
 
-        payload = { url };
+        payload = {
+          url,
+          categoryOrProductUrls: [{ url }]
+        };
         document.getElementById('displayAsin').textContent = asin;
         const canonical = `https://www.amazon.com/dp/${asin}`;
         document.getElementById('displayCanonical').textContent = canonical;
@@ -332,16 +368,29 @@
       loadingBanner.classList.remove('hidden');
 
       try {
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        const apiUrl = getApiUrl();
+        let data;
 
-        const data = await response.json();
+        if (apiUrl === 'demo') {
+          // Offline Mock Demo Response
+          await new Promise(r => setTimeout(r, 1200));
+          data = {
+            success: true,
+            markdownReport: `# Demo Product Report (Offline Mode)\n\n## Overview\n* **Status:** Analyzed successfully in mock environment.\n* **Price:** $129.99\n* **Rating:** 4.6 / 5 stars (12,450 reviews)\n\n### Key Highlights\n* Active Noise Cancellation (ANC) technology\n* Up to 30 hours of wireless battery life\n* Comfortable ergonomic over-ear cushioning`,
+            rawJson: [{ title: "Sample Headphones", price: "$129.99", rating: "4.6" }]
+          };
+        } else {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
 
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Failed to process product analysis.');
+          data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Failed to process product analysis.');
+          }
         }
 
         // Render Markdown using Marked.js
@@ -352,7 +401,18 @@
         resultsCard.classList.remove('hidden');
 
       } catch (err) {
-        errorMessage.textContent = err.message || 'An error occurred while connecting to the backend server.';
+        if (err.name === 'TypeError' || err.message?.includes('Failed to fetch') || err.message?.includes('fetch')) {
+          errorMessage.innerHTML = `
+            <strong>Connection Failed (Failed to Fetch):</strong><br/>
+            Unable to connect to backend at <code class="bg-slate-950 px-1.5 py-0.5 rounded text-amber-400 font-mono text-xs">${getApiUrl()}</code>.<br/>
+            <div class="mt-2 text-xs text-slate-300 space-y-1">
+              <p>• Verify that your backend server is running and accessible.</p>
+              <p>• Try switching the <strong>API Endpoint</strong> in the settings dropdown above to <em>"Offline Demo / Mock Mode"</em> or <em>"Local Node Server"</em>.</p>
+            </div>
+          `;
+        } else {
+          errorMessage.textContent = err.message || 'An error occurred while connecting to the backend server.';
+        }
         errorAlert.classList.remove('hidden');
       } finally {
         submitBtn.disabled = false;
