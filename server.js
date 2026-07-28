@@ -16,30 +16,47 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-let systemInstructionPrompt = "You are an expert e-commerce data analyst. Parse the raw Amazon JSON product object and generate a clean executive Markdown report.";
-try {
-  const promptPath = path.join(process.cwd(), 'prompt.md');
-  if (fs.existsSync(promptPath)) {
-    systemInstructionPrompt = fs.readFileSync(promptPath, 'utf-8');
+// Helper function to safely load system prompt without crashing on Vercel
+function loadSystemPrompt() {
+  let fallbackPrompt = "You are an expert e-commerce data analyst. Parse the raw Amazon JSON product object and generate a clean executive Markdown report.";
+  try {
+    const promptPath = path.join(process.cwd(), 'prompt.md');
+    if (fs.existsSync(promptPath)) {
+      return fs.readFileSync(promptPath, 'utf-8');
+    }
+  } catch (err) {
+    console.warn("Could not load prompt.md, using fallback prompt:", err);
   }
-} catch (err) {
-  console.warn("Could not load prompt.md, using fallback prompt:", err);
+  return fallbackPrompt;
 }
 
+// Health Check / Homepage Route
 app.get('/', (req, res) => {
-  const indexPath = path.join(process.cwd(), 'index.html');
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.send('🚀 Amazon Scraper Backend API (ScrapingBee Powered) is running live!');
+  try {
+    const indexPath = path.join(process.cwd(), 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(200).send('🚀 Amazon Scraper Backend API (ScrapingBee Engine) is running live!');
+    }
+  } catch (err) {
+    res.status(200).send('🚀 Amazon Scraper Backend API is running!');
   }
 });
 
+// Primary Analysis API Route
 app.post('/api/analyze', async (req, res) => {
   try {
-    const { url, rawJson } = req.body;
+    // 1. Verify Gemini API Key exists
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) {
+      return res.status(500).json({
+        success: false,
+        error: "GEMINI_API_KEY environment variable is missing in Vercel settings."
+      });
+    }
+
+    const { url, rawJson } = req.body || {};
     let productData = null;
 
     // Option A: Raw JSON Paste Bypass
@@ -65,18 +82,18 @@ app.post('/api/analyze', async (req, res) => {
         });
       }
 
-      const apiKey = process.env.SCRAPINGBEE_API_KEY;
-      if (!apiKey) {
+      const scrapingBeeKey = process.env.SCRAPINGBEE_API_KEY;
+      if (!scrapingBeeKey) {
         return res.status(500).json({ 
           success: false, 
-          error: "SCRAPINGBEE_API_KEY environment variable is missing on the server." 
+          error: "SCRAPINGBEE_API_KEY environment variable is missing on Vercel server." 
         });
       }
 
       console.log(`[ScrapingBee] Fetching product data for ASIN: ${asin}...`);
 
-      // Call ScrapingBee Amazon Product Endpoint (Synchronous REST API)
-      const scrapingBeeUrl = `https://app.scrapingbee.com/api/v1/amazon/product?api_key=${apiKey}&query=${asin}&country=us`;
+      // Call ScrapingBee Amazon Product Endpoint
+      const scrapingBeeUrl = `https://app.scrapingbee.com/api/v1/amazon/product?api_key=${scrapingBeeKey}&query=${asin}&country=us`;
       const response = await fetch(scrapingBeeUrl);
 
       if (!response.ok) {
@@ -94,7 +111,11 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    console.log("[Gemini AI] Generating executive product report...");
+    console.log("[Gemini AI] Initializing AI client & generating report...");
+    
+    // Initialize Google Gen AI inside request to prevent boot-time crashes
+    const ai = new GoogleGenAI({ apiKey: geminiKey });
+    const systemInstructionPrompt = loadSystemPrompt();
 
     // Send clean JSON output to Gemini AI
     const aiResponse = await ai.models.generateContent({
@@ -121,10 +142,13 @@ app.post('/api/analyze', async (req, res) => {
   }
 });
 
-// Start Local Server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Amazon Scraper Backend API (ScrapingBee Engine) running on port ${PORT}!`);
-});
+// Only start local HTTP listener if NOT running inside Vercel serverless environment
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Local Server running on port ${PORT}`);
+  });
+}
 
+// Export Express app as a Vercel Serverless Function module
 export default app;
